@@ -1,4 +1,7 @@
-const { TwitterApi } = require("twitter-api-v2");
+import dotenv from "dotenv";
+import { TwitterApi } from "twitter-api-v2";
+
+dotenv.config();
 
 const client = new TwitterApi({
   appKey: process.env.API_KEY,
@@ -9,7 +12,5 @@ const client = new TwitterApi({
 
 const bearer = new TwitterApi(process.env.BEARER_TOKEN);
 
-const twitterClient = client.readWrite;
-const twitterBearer = bearer.readOnly;
-
-module.exports = { twitterClient, twitterBearer };
+export const twitterClient = client.readWrite;
+export const twitterBearer = bearer.readOnly;
