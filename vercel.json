@@ -1,0 +1,14 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/tweet",
+      "schedule": "0 12 * * *"
+    }
+  ],
+  "functions": {
+    "api/cron/tweet.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
+}

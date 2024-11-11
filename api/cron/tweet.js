@@ -1,11 +1,10 @@
+// api/cron/tweet.js
 import dotenv from "dotenv";
-import { twitterClient } from "./twitterClient.js";
+import { twitterClient } from "../../utils/twitterClient.js";
 import OpenAI from "openai";
 
-// Load environment variables
 dotenv.config();
 
-// Initialize OpenAI with API key
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -13,7 +12,6 @@ const openai = new OpenAI({
 // GPT-Generated Solana Tweet
 const generateSolanaTweet = async () => {
   try {
-    // Define system and user messages for GPT
     const systemMessage = {
       role: "system",
       content:
@@ -30,14 +28,13 @@ const generateSolanaTweet = async () => {
       "NextJS, React, React Native, Javascript, Typescript, Python, R, Rust, Ruby, Ruby on Rails",
     ];
 
-    // Shuffle the topics array and select a random topic
     const shuffledTopic = topics[Math.floor(Math.random() * topics.length)];
 
     const userMessage = {
       role: "user",
       content: `Write a tweet with relevant information: "${shuffledTopic}" Use less than 260 characters, do not use emojis or quotations, use max 3 hashtags.`,
     };
-    // Generate a tweet using OpenAI
+
     const response = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [systemMessage, userMessage],
@@ -45,39 +42,52 @@ const generateSolanaTweet = async () => {
       temperature: 0.7,
     });
 
-    // Extract the generated tweet text
-    const tweet = response.choices[0]?.message?.content.trim();
-    console.log("Generated Tweet:", tweet);
-    return tweet;
+    return response.choices[0]?.message?.content.trim();
   } catch (error) {
     console.error("Error generating tweet with GPT:", error);
+    throw error;
   }
 };
 
-// Function to tweet
 const tweet = async () => {
   try {
     const tweetContent = await generateSolanaTweet();
     const response = await twitterClient.v2.tweet(tweetContent);
-    console.log("Tweet sent successfully:", response);
-  } catch (e) {
-    if (e.code === 429) {
-      const resetTime = e.rateLimit?.day?.reset || e.rateLimit?.reset;
-      const waitTime = resetTime * 1000 - Date.now();
-      console.error(
-        `Rate limit exceeded. Retrying in ${Math.ceil(
-          waitTime / 1000 / 60
-        )} minutes...`
-      );
-      setTimeout(tweet, waitTime);
-    } else {
-      console.error("Error sending tweet:", e);
-    }
+    return response;
+  } catch (error) {
+    console.error("Error sending tweet:", error);
+    throw error;
   }
 };
 
-// Schedule the tweet every 4 hours
-setInterval(tweet, 4 * 60 * 60 * 1000);
+// New function to determine if we should tweet based on current hour
+const shouldTweetAtCurrentHour = () => {
+  const currentHour = new Date().getUTCHours();
+  // Array of hours when we want to tweet (in UTC)
+  // Example: [0, 6, 12, 18] for every 6 hours
+  const tweetHours = [0, 6, 12, 18];
+  return tweetHours.includes(currentHour);
+};
 
-// Run the tweet function immediately at startup
-tweet();
+export default async function handler(req, res) {
+  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Option 1: Single tweet per day
+    const response = await tweet();
+    return res.status(200).json({ success: true, data: response });
+
+    /* Option 2: Multiple tweets simulation (uncomment to use)
+    if (shouldTweetAtCurrentHour()) {
+      const response = await tweet();
+      return res.status(200).json({ success: true, data: response });
+    } else {
+      return res.status(200).json({ success: true, message: "Not scheduled for this hour" });
+    }
+    */
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+}
